@@ -1,0 +1,16 @@
+services:
+  discord-status:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    container_name: discord-status-studio
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    volumes:
+      - ./data:/data
+    environment:
+      # 처음 실행 시 대시보드 비밀번호 (없으면 랜덤 생성 후 로그에 표시)
+      - STUDIO_PASSWORD=${STUDIO_PASSWORD:-}
+      # 선택: Claude AI 자동 꾸미기
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}

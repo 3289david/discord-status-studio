@@ -1,0 +1,7 @@
+node_modules/
+apps/*/shared/
+apps/windows/dist/
+data/
+*.log
+.env
+.DS_Store

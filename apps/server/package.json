@@ -1,0 +1,20 @@
+{
+  "name": "discord-status-server",
+  "version": "1.0.0",
+  "description": "Discord Status Studio — Linux server mode with web dashboard",
+  "license": "MIT",
+  "type": "module",
+  "bin": { "discord-status": "src/cli.js" },
+  "scripts": {
+    "sync": "node ../../scripts/sync-shared.mjs server",
+    "postinstall": "node -e \"require('fs').existsSync('../../scripts/sync-shared.mjs') && require('child_process').execSync('node ../../scripts/sync-shared.mjs server',{stdio:'inherit'})\"",
+    "prestart": "npm run sync --silent",
+    "start": "node src/cli.js start",
+    "dev": "npm run sync && DSS_DATA_DIR=./data node src/cli.js start --port 8787"
+  },
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.129.0",
+    "zod": "^4.6.5"
+  }
+}

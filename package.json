@@ -1,0 +1,16 @@
+{
+  "name": "discord-status-studio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Design your Discord Rich Presence and keep it running — Windows tray app + Linux server with web dashboard.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync-shared.mjs",
+    "test": "node --test packages/core/test/*.test.js",
+    "win:dev": "cd apps/windows && npm start",
+    "win:build": "cd apps/windows && npm run dist",
+    "server": "cd apps/server && npm start"
+  },
+  "engines": { "node": ">=20" }
+}

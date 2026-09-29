@@ -1,0 +1,9 @@
+{
+  "name": "Discord Status Studio",
+  "short_name": "Status Studio",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#1e1f22",
+  "theme_color": "#1e1f22",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

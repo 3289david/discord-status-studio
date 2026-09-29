@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install core deps
+        run: npm install --prefix packages/core --no-fund --no-audit
+      - name: Unit tests
+        run: npm test
+      - name: Server smoke test
+        run: |
+          cd apps/server
+          npm install --no-fund --no-audit
+          export DSS_DATA_DIR=$RUNNER_TEMP/dss STUDIO_PASSWORD=ci-password-123
+          node src/cli.js start -d --port 8787
+          sleep 3
+          curl -fsS http://127.0.0.1:8787/healthz
+          node src/cli.js set "Minecraft 서버 개발 중 mc.krl.kr"
+          node src/cli.js status
+          node src/cli.js stop
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build Windows app
+        working-directory: apps/windows
+        run: |
+          npm install --no-fund --no-audit
+          npm run dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            apps/windows/dist/*.exe

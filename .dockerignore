@@ -1,0 +1,5 @@
+**/node_modules
+**/shared
+apps/windows
+data
+.git

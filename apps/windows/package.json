@@ -1,0 +1,43 @@
+{
+  "name": "discord-status-studio",
+  "productName": "Discord Status Studio",
+  "version": "1.0.0",
+  "description": "Design your Discord Rich Presence and keep it running from the tray",
+  "license": "MIT",
+  "author": "Discord Status Studio",
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "sync": "node ../../scripts/sync-shared.mjs windows",
+    "postinstall": "node -e \"require('fs').existsSync('../../scripts/sync-shared.mjs') && require('child_process').execSync('node ../../scripts/sync-shared.mjs windows',{stdio:'inherit'})\"",
+    "start": "npm run sync && electron .",
+    "dist": "npm run sync && electron-builder --win",
+    "dist:portable": "npm run sync && electron-builder --win portable"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.129.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.discordstatusstudio.app",
+    "productName": "Discord Status Studio",
+    "directories": { "output": "dist" },
+    "files": ["main.js", "preload.cjs", "assets/**", "shared/**", "package.json"],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }, { "target": "portable", "arch": ["x64"] }],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Discord Status Studio"
+    },
+    "portable": { "artifactName": "DiscordStatusStudio-${version}-portable.exe" }
+  }
+}
