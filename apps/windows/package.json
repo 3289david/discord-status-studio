@@ -1,7 +1,7 @@
 {
   "name": "discord-status-studio",
   "productName": "Discord Status Studio",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Design your Discord Rich Presence and keep it running from the tray",
   "license": "MIT",
   "author": "Discord Status Studio",

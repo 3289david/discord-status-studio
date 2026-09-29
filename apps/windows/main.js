@@ -17,6 +17,9 @@ let quitting = false;
 let hiddenHintShown = false;
 let lastSnap = null;
 
+// Separate profile (and single-instance lock) for dev/test runs next to an installed copy.
+if (process.env.DSS_USER_DATA) app.setPath('userData', path.resolve(process.env.DSS_USER_DATA));
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
   process.exit(0);
@@ -99,59 +102,57 @@ const clip = (s, n = 48) => (Array.from(s || '').length > n ? Array.from(s).slic
 function buildTrayMenu(snap) {
   const c = snap.connection;
   const statusLine =
-    snap.paused ? '⏸ 일시정지됨'
-      : c.status === 'connected' ? `🟢 실행 중${c.user ? ` · ${c.user.global_name || c.user.username}` : ''}`
-        : c.status === 'connecting' ? '🟡 연결 중…'
-          : `🔴 ${clip(c.error || 'Discord 연결 안 됨', 40)}`;
+    snap.paused ? '일시정지됨'
+      : c.status === 'connected' ? `실행 중${c.user ? ` · ${c.user.global_name || c.user.username}` : ''}`
+        : c.status === 'connecting' ? '연결 중…'
+          : `${clip(c.error || 'Discord 연결 안 됨', 40)}`;
   const favs = snap.library.filter((x) => x.favorite);
   const others = snap.library.filter((x) => !x.favorite).slice(0, 20);
   const item = (x) => ({
-    label: clip(`${/\p{Extended_Pictographic}/u.test(x.emoji) ? x.emoji : '⭐'}  ${x.label}`, 40),
+    label: clip(x.label, 40),
     type: 'radio',
     checked: snap.currentStatusId === x.id && snap.mode === 'manual',
     click: () => engine.applyStatus(x.id),
   });
   const statusMenu = [
-    ...(favs.length ? [{ label: '⭐ 즐겨찾기', enabled: false }, ...favs.map(item)] : []),
+    ...favs.map(item),
     ...(others.length ? [{ type: 'separator' }, ...others.map(item)] : []),
     ...(snap.library.length ? [{ type: 'separator' }] : [{ label: '저장된 상태 없음', enabled: false }, { type: 'separator' }]),
-    { label: '✨ 테마', submenu: THEMES.map((t) => ({ label: `${t.emoji}  ${t.name}`, click: () => engine.applyTheme(t.id) })) },
+    { label: '프리셋', submenu: THEMES.map((t) => ({ label: t.name, click: () => engine.applyTheme(t.id) })) },
   ];
   const timer = snap.override && snap.override.until > Date.now();
   return Menu.buildFromTemplate([
     { label: 'Discord Status Studio', enabled: false },
     { label: statusLine, enabled: false },
-    { label: `🎨 ${clip(snap.live?.label || '-', 40)}`, enabled: false },
-    { label: `     ${clip(summarize(snap.live?.presence), 44)}`, enabled: false },
+    { label: clip(summarize(snap.live?.presence), 44), enabled: false },
     { type: 'separator' },
     snap.paused
-      ? { label: '▶ 재개', click: () => engine.setPaused(false) }
-      : { label: '⏸ 일시정지', click: () => engine.setPaused(true) },
-    { label: '🔄 상태 변경', submenu: statusMenu },
-    { label: '⏭ 다음 즐겨찾기', accelerator: snap.settings.hotkeys ? 'Ctrl+Alt+Right' : undefined, click: () => engine.nextFavorite(1) },
+      ? { label: '재개', click: () => engine.setPaused(false) }
+      : { label: '일시정지', click: () => engine.setPaused(true) },
+    { label: '상태', submenu: statusMenu },
     {
-      label: '🧭 모드',
+      label: '모드',
       submenu: [
-        ['manual', '✋ 수동'],
-        ['auto', '🤖 자동 (규칙)'],
-        ['rotation', '🔁 순환'],
+        ['manual', '수동'],
+        ['auto', '자동'],
+        ['rotation', '순환'],
       ].map(([m, l]) => ({ label: l, type: 'radio', checked: snap.mode === m, click: () => engine.setMode(m) })),
     },
     {
-      label: timer ? `⏱ 타이머 · ${clip(snap.override.label, 20)}` : '⏱ 빠른 타이머',
+      label: timer ? `임시 · ${clip(snap.override.label, 20)}` : '임시 적용',
       submenu: [
         ...[15, 30, 60].map((m) => ({ label: `현재 상태로 ${m}분`, click: () => engine.startTimer({ minutes: m, label: `${m}분` }) })),
         { type: 'separator' },
-        { label: '🍅 Focus 25분', click: () => engine.startTimer({ minutes: 25, label: 'Focus', presence: { ...snap.current, details: '🍅 Focus session', state: 'Do not disturb', largeImage: '🍅', largeText: 'Pomodoro', timestamps: { mode: 'countdown', minutes: 25 } } }) },
-        { label: '🚶 BRB 15분', click: () => engine.startTimer({ minutes: 15, label: 'BRB', presence: { ...snap.current, details: '🚶 Be right back', state: 'Stepped out', largeImage: '🚶', largeText: 'BRB', timestamps: { mode: 'countdown', minutes: 15 } } }) },
-        ...(timer ? [{ type: 'separator' }, { label: '■ 타이머 종료', click: () => engine.cancelTimer() }] : []),
+        { label: 'Focus 25분', click: () => engine.startTimer({ minutes: 25, label: 'Focus', presence: { ...snap.current, details: '🍅 Focus session', state: 'Do not disturb', largeImage: '🍅', largeText: 'Pomodoro', timestamps: { mode: 'countdown', minutes: 25 } } }) },
+        { label: 'BRB 15분', click: () => engine.startTimer({ minutes: 15, label: 'BRB', presence: { ...snap.current, details: '🚶 Be right back', state: 'Stepped out', largeImage: '🚶', largeText: 'BRB', timestamps: { mode: 'countdown', minutes: 15 } } }) },
+        ...(timer ? [{ type: 'separator' }, { label: '종료', click: () => engine.cancelTimer() }] : []),
       ],
     },
     { type: 'separator' },
-    { label: '🎨 열기', click: () => showWindow() },
-    { label: '⚙ 설정', click: () => showWindow('settings') },
+    { label: '열기', click: () => showWindow() },
+    { label: '설정', click: () => showWindow('settings') },
     { type: 'separator' },
-    { label: '✖ 종료', click: () => quit() },
+    { label: '끝내기', click: () => quit() },
   ]);
 }
 
@@ -316,13 +317,13 @@ app.whenReady().then(async () => {
     win.webContents.on('did-fail-load', (_e, code, desc) => log('[renderer] load failed', code, desc));
     setTimeout(async () => {
       const report = await win.webContents.executeJavaScript(`(async () => {
-        const out = { nav: document.querySelectorAll('.nav-btn').length, pages: {} };
-        for (const b of document.querySelectorAll('.nav-btn')) {
+        const out = { nav: document.querySelectorAll('.nav button').length, pages: {} };
+        for (const b of document.querySelectorAll('.nav button')) {
           b.click();
           await new Promise((r) => setTimeout(r, 250));
-          out.pages[b.dataset.page] = document.querySelector('.content')?.innerText.length || 0;
+          out.pages[b.textContent] = document.querySelector('.page')?.innerText.length || 0;
         }
-        out.top = document.querySelector('.topbar')?.innerText.replace(/\\n/g, ' | ');
+        out.top = document.querySelector('.header')?.innerText.replace(/\\n/g, ' | ');
         return out;
       })()`);
       log('[smoke]', JSON.stringify(report));
