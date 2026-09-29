@@ -12,5 +12,5 @@ services:
     environment:
       # 처음 실행 시 대시보드 비밀번호 (없으면 랜덤 생성 후 로그에 표시)
       - STUDIO_PASSWORD=${STUDIO_PASSWORD:-}
-      # 선택: Claude AI 자동 꾸미기
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # 선택: AI 자동 꾸미기 (OpenRouter)
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}

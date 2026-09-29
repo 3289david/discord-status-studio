@@ -187,11 +187,11 @@ test('engine: library, rules, rotation, timer, share codes (no Discord)', async 
   assert.equal(engine.live.presence, null);
 
   const masked = engine.getSnapshot().settings;
-  engine.setSettings({ anthropicKey: 'sk-test' });
-  assert.equal(engine.getSnapshot().settings.anthropicKey, '__keep__');
-  engine.setSettings({ anthropicKey: '__keep__' });
-  assert.equal(engine.settings.anthropicKey, 'sk-test');
-  assert.equal(masked.has_anthropicKey, false);
+  engine.setSettings({ openrouterKey: 'sk-test' });
+  assert.equal(engine.getSnapshot().settings.openrouterKey, '__keep__');
+  engine.setSettings({ openrouterKey: '__keep__' });
+  assert.equal(engine.settings.openrouterKey, 'sk-test');
+  assert.equal(masked.has_openrouterKey, false);
 
   await assert.rejects(engine.call('store', []), /Unknown method/);
   await engine.stop();

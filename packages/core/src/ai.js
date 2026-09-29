@@ -1,30 +1,39 @@
-// AI status designer powered by Claude. Falls back to the offline generator
-// (aesthetic.js) when no API key is configured or the call fails.
-import Anthropic from '@anthropic-ai/sdk';
-import { z } from 'zod';
-import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
+// AI status designer powered by OpenRouter (https://openrouter.ai) — any model it
+// routes to. Falls back to the offline generator (aesthetic.js) when no API key is
+// configured or the call fails.
 import { generate, restyle } from './aesthetic.js';
 import { normalizePresence } from './presence.js';
 
-export const DEFAULT_MODEL = 'claude-opus-5-5';
+export const DEFAULT_MODEL = 'openrouter/auto';
+const API = 'https://openrouter.ai/api/v1';
 
-const Variant = z.object({
-  name: z.string().describe('Activity name, 2-30 chars, e.g. "Coding Mode"'),
-  activityType: z.enum(['playing', 'listening', 'watching', 'competing']),
-  details: z.string().describe('First line, <= 64 chars, usually starts with one emoji'),
-  state: z.string().describe('Second line, <= 64 chars'),
-  largeImageEmoji: z.string().describe('Exactly one emoji used as the large image'),
-  largeText: z.string(),
-  smallImageEmoji: z.string().describe('One emoji for the small badge, or empty string'),
-  smallText: z.string(),
-  customStatusEmoji: z.string(),
-  customStatusText: z.string().describe('Short lowercase custom status, <= 40 chars'),
-  buttonLabel: z.string().describe('Button label <= 30 chars (with emoji), or empty string if no link was given'),
-  buttonUrl: z.string().describe('https URL from the user input, or empty string'),
-  style: z.string().describe('Short name of the visual style used'),
-});
+const VARIANT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['name', 'activityType', 'details', 'state', 'largeImageEmoji', 'largeText', 'smallImageEmoji', 'smallText', 'customStatusEmoji', 'customStatusText', 'buttonLabel', 'buttonUrl', 'style'],
+  properties: {
+    name: { type: 'string', description: 'Activity name, 2-30 chars, e.g. "Coding Mode"' },
+    activityType: { type: 'string', enum: ['playing', 'listening', 'watching', 'competing'] },
+    details: { type: 'string', description: 'First line, <= 64 chars, usually starts with one emoji' },
+    state: { type: 'string', description: 'Second line, <= 64 chars' },
+    largeImageEmoji: { type: 'string', description: 'Exactly one emoji used as the large image' },
+    largeText: { type: 'string' },
+    smallImageEmoji: { type: 'string', description: 'One emoji for the small badge, or empty string' },
+    smallText: { type: 'string' },
+    customStatusEmoji: { type: 'string' },
+    customStatusText: { type: 'string', description: 'Short lowercase custom status, <= 40 chars' },
+    buttonLabel: { type: 'string', description: 'Button label <= 30 chars (with emoji), or empty string if no link was given' },
+    buttonUrl: { type: 'string', description: 'https URL from the user input, or empty string' },
+    style: { type: 'string', description: 'Short name of the visual style used' },
+  },
+};
 
-const Result = z.object({ variants: z.array(Variant) });
+const RESULT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['variants'],
+  properties: { variants: { type: 'array', items: VARIANT_SCHEMA } },
+};
 
 const SYSTEM = `You design Discord Rich Presence statuses that look great on a Discord profile.
 
@@ -36,101 +45,163 @@ Rules for good-looking Discord statuses:
 - Vary the styling between variants: e.g. plain emoji-lead, ALL CAPS header, box-drawing tree (┌─ / └─), unicode small caps, lowercase aesthetic with ✦, terminal prompt ("> coding_"), 【 brackets 】.
 - If the user mentions a domain or URL, show it in the state line and add a button pointing to it (https). Otherwise leave button fields empty.
 - Pick activityType sensibly: music → listening, video/anime → watching, otherwise playing.
-- Never include slurs, sexual content, or impersonation of real brands' official accounts.`;
+- Never include slurs, sexual content, or impersonation of real brands' official accounts.
+
+Respond with JSON only, matching this shape: {"variants":[{"name","activityType","details","state","largeImageEmoji","largeText","smallImageEmoji","smallText","customStatusEmoji","customStatusText","buttonLabel","buttonUrl","style"}]}`;
+
+class AiError extends Error {}
 
 export class AiDesigner {
-  constructor({ apiKey, model = DEFAULT_MODEL, log = () => {}, fetch } = {}) {
-    this.apiKey = apiKey;
+  constructor({ apiKey, model = DEFAULT_MODEL, log = () => {}, fetch: fetchImpl } = {}) {
+    this.apiKey = apiKey || process.env.OPENROUTER_API_KEY || '';
     this.model = model || DEFAULT_MODEL;
     this.log = log;
-    apiKey = apiKey || process.env.ANTHROPIC_API_KEY;
-    this.client = apiKey ? new Anthropic({ apiKey, ...(fetch ? { fetch } : {}) }) : null;
+    this.fetch = fetchImpl || globalThis.fetch;
   }
 
   get enabled() {
-    return !!this.client;
+    return !!this.apiKey;
+  }
+
+  async chat(userContent, { structured = true } = {}) {
+    const body = {
+      model: this.model,
+      messages: [
+        { role: 'system', content: SYSTEM },
+        { role: 'user', content: userContent },
+      ],
+      temperature: 0.9,
+      max_tokens: 4000,
+    };
+    if (structured) {
+      body.response_format = { type: 'json_schema', json_schema: { name: 'discord_status_variants', strict: true, schema: RESULT_SCHEMA } };
+    }
+    const res = await this.fetch(`${API}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${this.apiKey}`,
+        'content-type': 'application/json',
+        'HTTP-Referer': 'https://github.com/3289david/discord-status-studio',
+        'X-Title': 'Discord Status Studio',
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(90_000),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json.error) {
+      const status = json.error?.code || res.status;
+      const msg = json.error?.message || `HTTP ${res.status}`;
+      const err = new AiError(
+        status === 401 ? 'OpenRouter API 키가 올바르지 않습니다.'
+          : status === 402 ? 'OpenRouter 크레딧이 부족합니다.'
+            : status === 429 ? 'OpenRouter 사용량 한도에 도달했습니다. 잠시 후 다시 시도하세요.'
+              : `OpenRouter 오류 (${status}): ${msg}`,
+      );
+      err.status = Number(status) || res.status;
+      throw err;
+    }
+    const content = json.choices?.[0]?.message?.content;
+    if (!content) throw new AiError('AI 응답이 비어 있습니다.');
+    return typeof content === 'string' ? content : content.map((c) => c.text || '').join('');
   }
 
   async ask(userContent, count) {
-    const response = await this.client.beta.messages.parse({
-      model: this.model,
-      max_tokens: 16000,
-      output_config: { effort: 'low', format: betaZodOutputFormat(Result) },
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      system: SYSTEM,
-      messages: [{ role: 'user', content: userContent }],
-    });
-    if (response.stop_reason === 'refusal') throw new Error('AI가 이 요청을 처리하지 않았습니다.');
-    const parsed = response.parsed_output;
-    if (!parsed?.variants?.length) throw new Error('AI 응답을 해석하지 못했습니다.');
-    return parsed.variants.slice(0, count).map(toPresence);
+    let text;
+    try {
+      text = await this.chat(userContent, { structured: true });
+    } catch (e) {
+      // Not every model supports structured outputs — retry with plain JSON prompting.
+      if (e.status === 400 || e.status === 404 || e.status === 422) text = await this.chat(userContent, { structured: false });
+      else throw e;
+    }
+    const variants = parseVariants(text);
+    if (!variants.length) throw new AiError('AI 응답을 해석하지 못했습니다.');
+    return variants.slice(0, count).map(toPresence);
   }
 
   /** Free text ("게임 좋아하고 개발하는 사람 느낌") → presence variants. */
   async design(prompt, { count = 4 } = {}) {
-    if (!this.client) return { source: 'local', variants: generate(prompt, { count }) };
+    if (!this.enabled) return { source: 'local', variants: generate(prompt, { count }) };
     try {
-      const variants = await this.ask(
-        `Create ${count} different Discord status variants for this request:\n\n${prompt}`,
-        count,
-      );
-      return { source: 'ai', variants };
+      const variants = await this.ask(`Create ${count} different Discord status variants for this request:\n\n${prompt}`, count);
+      return { source: 'ai', model: this.model, variants };
     } catch (e) {
-      this.log('AI design failed, using offline generator:', errorMessage(e));
-      return { source: 'local', error: errorMessage(e), variants: generate(prompt, { count }) };
+      this.log('AI design failed, using offline generator:', e.message);
+      return { source: 'local', error: e.message, variants: generate(prompt, { count }) };
     }
   }
 
   /** "Make it aesthetic": same meaning, new style. `avoid` = previously shown lines. */
   async aesthetic(presence, { step = 0, avoid = [] } = {}) {
-    if (!this.client) return { source: 'local', variants: [restyle(presence, step)] };
+    if (!this.enabled) return { source: 'local', variants: [restyle(presence, step)] };
     const p = normalizePresence(presence);
     try {
       const variants = await this.ask(
         `Restyle this Discord status. Keep the same meaning and topic, but give it a fresh aesthetic.\n` +
           `Current:\n- name: ${p.name}\n- details: ${p.details}\n- state: ${p.state}\n` +
           (avoid.length ? `Do not reuse these previous versions:\n${avoid.map((a) => `- ${a}`).join('\n')}\n` : '') +
-          `Return 1 variant.`,
+          `Return exactly 1 variant.`,
         1,
       );
       // Keep the user's images/buttons/timestamps; only restyle the text.
       const v = variants[0];
       return {
         source: 'ai',
+        model: this.model,
         variants: [normalizePresence({ ...p, name: v.name || p.name, details: v.details, state: v.state, customStatus: v.customStatus })],
       };
     } catch (e) {
-      this.log('AI aesthetic failed:', errorMessage(e));
-      return { source: 'local', error: errorMessage(e), variants: [restyle(presence, step)] };
+      this.log('AI aesthetic failed:', e.message);
+      return { source: 'local', error: e.message, variants: [restyle(presence, step)] };
     }
   }
 }
 
-function errorMessage(e) {
-  if (e instanceof Anthropic.AuthenticationError) return 'Anthropic API 키가 올바르지 않습니다.';
-  if (e instanceof Anthropic.RateLimitError) return 'API 사용량 한도에 도달했습니다. 잠시 후 다시 시도하세요.';
-  if (e instanceof Anthropic.APIConnectionError) return 'Anthropic API에 연결할 수 없습니다.';
-  if (e instanceof Anthropic.APIError) return `API 오류 (${e.status}): ${e.message}`;
-  return e?.message || String(e);
+/** Parse model output, tolerating ```json fences and prose around the JSON. */
+export function parseVariants(text) {
+  let data = null;
+  const cleaned = String(text).replace(/```(?:json)?/gi, '').trim();
+  try {
+    data = JSON.parse(cleaned);
+  } catch {
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      try {
+        data = JSON.parse(cleaned.slice(start, end + 1));
+      } catch {}
+    }
+  }
+  const list = Array.isArray(data) ? data : Array.isArray(data?.variants) ? data.variants : data && typeof data === 'object' && data.details ? [data] : [];
+  return list.filter((v) => v && typeof v === 'object' && (v.details || v.state || v.name));
+}
+
+/** Fetch the public OpenRouter model list (for the settings dropdown). */
+export async function listModels(fetchImpl = globalThis.fetch) {
+  const res = await fetchImpl(`${API}/models`, { signal: AbortSignal.timeout(15_000) });
+  if (!res.ok) throw new Error(`OpenRouter 모델 목록을 불러오지 못했습니다 (HTTP ${res.status})`);
+  const json = await res.json();
+  return (json.data || []).map((m) => ({ id: m.id, name: m.name || m.id })).sort((a, b) => a.id.localeCompare(b.id));
 }
 
 const TYPE_MAP = { playing: 0, listening: 2, watching: 3, competing: 5 };
+const str = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
 
 function toPresence(v) {
-  const buttons = v.buttonUrl && /^https?:\/\//.test(v.buttonUrl) ? [{ label: v.buttonLabel || '🌐 Website', url: v.buttonUrl }] : [];
+  const url = str(v.buttonUrl);
+  const buttons = /^https?:\/\//.test(url) ? [{ label: str(v.buttonLabel) || '🌐 Website', url }] : [];
   return normalizePresence({
-    name: v.name,
+    name: str(v.name),
     type: TYPE_MAP[v.activityType] ?? 0,
-    details: v.details,
-    state: v.state,
-    largeImage: v.largeImageEmoji,
-    largeText: v.largeText,
-    smallImage: v.smallImageEmoji,
-    smallText: v.smallText,
+    details: str(v.details),
+    state: str(v.state),
+    largeImage: str(v.largeImageEmoji),
+    largeText: str(v.largeText),
+    smallImage: str(v.smallImageEmoji),
+    smallText: str(v.smallText),
     buttons,
     timestamps: { mode: 'session' },
-    customStatus: { emoji: v.customStatusEmoji, text: v.customStatusText },
-    _style: v.style,
+    customStatus: { emoji: str(v.customStatusEmoji), text: str(v.customStatusText) },
+    _style: str(v.style),
   });
 }

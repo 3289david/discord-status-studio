@@ -12,10 +12,10 @@ import { baseVariables, renderPresence, presenceUsesVars } from './template.js';
 import { parseWindowInfo, KNOWN_APPS } from './processes.js';
 import { THEMES, getTheme } from './themes.js';
 import { STYLES, generate, applyStyle, restyle } from './aesthetic.js';
-import { AiDesigner, DEFAULT_MODEL } from './ai.js';
+import { AiDesigner, DEFAULT_MODEL, listModels } from './ai.js';
 import { VARIABLES } from './template.js';
 
-const SECRET_KEYS = ['discordToken', 'anthropicKey', 'remoteToken'];
+const SECRET_KEYS = ['discordToken', 'openrouterKey', 'remoteToken'];
 const KEEP = '__keep__';
 
 export const DEFAULT_DATA = {
@@ -26,7 +26,7 @@ export const DEFAULT_DATA = {
     appProfiles: [],
     discordToken: '',
     gatewayAppId: '',
-    anthropicKey: '',
+    openrouterKey: '',
     aiModel: DEFAULT_MODEL,
     pollSeconds: 10,
     minUpdateSeconds: 5,
@@ -62,7 +62,7 @@ export const PUBLIC_METHODS = [
   'setRules', 'addRuleFromApp', 'setRotation',
   'startTimer', 'cancelTimer',
   'setSettings', 'reconnect',
-  'aiDesign', 'aesthetic', 'generateLocal', 'applyStyle',
+  'aiDesign', 'aesthetic', 'generateLocal', 'applyStyle', 'listAiModels',
   'exportData', 'importData', 'shareCode', 'importShareCode',
   'clearHistory', 'resetStats',
 ];
@@ -463,7 +463,7 @@ export class StatusEngine extends EventEmitter {
       history: d.history.slice(0, 50),
       stats: d.stats,
       settings: this.maskedSettings(),
-      ai: { enabled: !!(this.settings.anthropicKey || process.env.ANTHROPIC_API_KEY), model: this.settings.aiModel || DEFAULT_MODEL },
+      ai: { enabled: !!(this.settings.openrouterKey || process.env.OPENROUTER_API_KEY), provider: 'OpenRouter', model: this.settings.aiModel || DEFAULT_MODEL },
       agent: this.agentReport ? { at: this.agentReport.at, host: this.agentReport.host, count: this.agentReport.procs.length } : null,
       windowInfo: this.windowInfo,
       serverTime: Date.now(),
@@ -749,7 +749,7 @@ export class StatusEngine extends EventEmitter {
   // ───────────────────────── generators ─────────────────────────
 
   getAi() {
-    if (!this.ai) this.ai = new AiDesigner({ apiKey: this.settings.anthropicKey, model: this.settings.aiModel, log: (...a) => this.log('[ai]', ...a) });
+    if (!this.ai) this.ai = new AiDesigner({ apiKey: this.settings.openrouterKey, model: this.settings.aiModel, log: (...a) => this.log('[ai]', ...a) });
     return this.ai;
   }
 
@@ -761,6 +761,13 @@ export class StatusEngine extends EventEmitter {
   async aesthetic(presence, step, avoid = []) {
     const s = step ?? this.aesStep++;
     return this.getAi().aesthetic(normalizePresence(presence || this.data.current), { step: s, avoid: avoid.slice(-6) });
+  }
+
+  async listAiModels() {
+    if (!this.modelCache || Date.now() - this.modelCache.at > 3600_000) {
+      this.modelCache = { at: Date.now(), models: await listModels() };
+    }
+    return this.modelCache.models;
   }
 
   generateLocal(text, count = 4) {

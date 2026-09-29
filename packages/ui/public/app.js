@@ -273,7 +273,7 @@ function buildShell() {
   navEl = h('nav', { class: 'side' },
     h('div', { class: 'brand' }, h('img', { src: 'icon.svg', alt: '' }), h('div', null, 'Status Studio', h('small', null, api.kind === 'desktop' ? 'Windows' : 'Server Dashboard'))),
     NAV.map(([id, ico, label]) => h('button', { class: 'nav-btn', 'data-page': id, onclick: () => go(id) }, h('span', { class: 'ico' }, ico), label)),
-    h('div', { class: 'side-foot' }, 'Discord Status Studio v1.0'));
+    h('div', { class: 'side-foot' }, 'Discord Status Studio v1.1'));
   topEl = h('header', { class: 'topbar' });
   contentEl = h('section', { class: 'content' });
   mainEl = h('main', { class: 'main' }, topEl, contentEl);
@@ -510,7 +510,7 @@ function aiCard() {
       try {
         const r = await run(() => api.call('aiDesign', ta.value, 4));
         S.variants = r.variants;
-        S.variantSource = r.source === 'ai' ? 'Claude AI' : `오프라인 생성기${r.error ? ` (AI 오류: ${r.error})` : ''}`;
+        S.variantSource = r.source === 'ai' ? `OpenRouter · ${r.model}` : `오프라인 생성기${r.error ? ` (AI 오류: ${r.error})` : ''}`;
       } finally {
         S.aiBusy = false;
         renderPage();
@@ -518,7 +518,7 @@ function aiCard() {
     },
   }, S.aiBusy ? '⏳ 생성 중…' : ai.enabled ? '✨ AI로 만들기' : '✨ 자동 생성');
   return h('div', { class: 'card ai-box' },
-    h('h3', null, '🪄 AI 자동 꾸미기', h('span', { class: 'right small muted' }, ai.enabled ? `Claude · ${ai.model}` : '오프라인 모드 (설정에서 API 키 입력 시 Claude 사용)')),
+    h('h3', null, '🪄 AI 자동 꾸미기', h('span', { class: 'right small muted' }, ai.enabled ? `OpenRouter · ${ai.model}` : '오프라인 모드 (설정에서 OpenRouter 키 입력 시 AI 사용)')),
     h('div', { class: 'stack' }, ta,
       h('div', { class: 'row' }, examples.map((ex) => h('button', { class: 'chip', onclick: () => { ta.value = ex; S.aiPrompt = ex; } }, ex)), h('span', { class: 'spacer' }), generateBtn)),
     S.variants.length ? h('div', null,
@@ -545,7 +545,7 @@ function styleCard() {
           S.aesSeen.push(`${v.details} / ${v.state}`);
           loadDraft({ ...S.draft, name: v.name || S.draft.name, details: v.details, state: v.state }, S.draftId);
           renderPage();
-          toast(r.source === 'ai' ? '✨ Claude가 새 스타일을 만들었어요' : '✨ 새 스타일 적용');
+          toast(r.source === 'ai' ? '✨ AI가 새 스타일을 만들었어요' : '✨ 새 스타일 적용');
         } }, '✨ Make it aesthetic'))),
     h('div', { class: 'row' }, styles.map((st) => h('button', { class: 'chip', onclick: async () => {
       const r = await run(() => api.call('applyStyle', S.draft, st.id));
@@ -998,10 +998,10 @@ function pageSettings() {
         h('div', null, h('button', { class: 'btn sm', onclick: async () => { await save(); await run(() => api.call('reconnect'), '다시 연결합니다'); } }, '🔄 저장 후 다시 연결')))),
 
     h('div', { class: 'card' },
-      h('h3', null, '🪄 AI (Claude)'),
+      h('h3', null, '🪄 AI (OpenRouter)'),
       h('div', { class: 'stack' },
-        field('Anthropic API 키', secret('anthropicKey', 'sk-ant-...'), h('span', null, '없으면 오프라인 생성기가 동작합니다. ', h('a', { href: 'https://console.anthropic.com/settings/keys', target: '_blank', rel: 'noreferrer' }, '키 발급받기'), web ? ' · 서버 환경변수 ANTHROPIC_API_KEY도 지원' : '')),
-        field('모델', inp('aiModel', { placeholder: S.meta?.defaultModel || 'claude-opus-5-5' })))),
+        field('OpenRouter API 키', secret('openrouterKey', 'sk-or-...'), h('span', null, '없으면 오프라인 생성기가 동작합니다. ', h('a', { href: 'https://openrouter.ai/keys', target: '_blank', rel: 'noreferrer' }, '키 발급받기'), web ? ' · 서버 환경변수 OPENROUTER_API_KEY도 지원' : '')),
+        modelField(s, field))),
 
     h('div', { class: 'card' },
       h('h3', null, '🎛️ 동작'),
@@ -1036,6 +1036,29 @@ function pageSettings() {
       h('div', { class: 'hint', style: { marginTop: '8px' } }, 'Windows 앱 ↔ 서버 간에 라이브러리와 규칙을 옮길 때 사용하세요. 토큰/API 키는 내보내지지 않습니다.')),
 
     h('div', { class: 'row' }, h('span', { class: 'spacer' }), h('button', { class: 'btn primary', onclick: save }, '💾 저장')));
+}
+
+function modelField(s, field) {
+  const listId = 'or-models';
+  const input = h('input', { class: 'input', list: listId, value: s.aiModel || '', placeholder: S.meta?.defaultModel || 'openrouter/auto', oninput: (e) => (s.aiModel = e.target.value.trim()) });
+  const datalist = h('datalist', { id: listId }, (S.models || []).map((m) => h('option', { value: m.id }, m.name)));
+  const load = h('button', { class: 'btn sm', onclick: async () => {
+    load.disabled = true;
+    load.textContent = '불러오는 중…';
+    try {
+      S.models = await run(() => api.call('listAiModels'));
+      datalist.replaceChildren(...S.models.map((m) => h('option', { value: m.id }, m.name)));
+      load.textContent = `✔ ${S.models.length}개 모델`;
+      input.focus();
+    } catch {
+      load.textContent = '다시 시도';
+    } finally {
+      load.disabled = false;
+    }
+  } }, S.models ? `✔ ${S.models.length}개 모델` : '📋 모델 목록 불러오기');
+  return field('모델', h('div', { class: 'stack' }, h('div', { class: 'input-wrap' }, input, load), datalist,
+    h('div', { class: 'row' }, ['openrouter/auto', 'openrouter/free'].map((id) => h('button', { class: 'chip', onclick: () => { input.value = id; s.aiModel = id; } }, id)))),
+  h('span', null, '입력칸에 모델 이름을 쳐서 검색하세요. ', h('code', null, 'openrouter/auto'), '는 요청마다 알맞은 모델을 자동 선택합니다. ', h('a', { href: 'https://openrouter.ai/models', target: '_blank', rel: 'noreferrer' }, '모델 둘러보기')));
 }
 
 function serverCards(s, toggle, field, inp) {

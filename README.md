@@ -5,7 +5,7 @@
 <p align="center">디스코드 프로필에 표시되는 상태(Rich Presence)를 직접 디자인하고,<br/>앱이 백그라운드에서 계속 유지해주는 프로그램.</p>
 
 <p align="center">
-  <b>🪟 Windows 트레이 앱</b> · <b>🐧 Linux 서버 + 웹 대시보드</b> · 🤖 Claude AI 자동 꾸미기
+  <b>🪟 Windows 트레이 앱</b> · <b>🐧 Linux 서버 + 웹 대시보드</b> · 🤖 AI 자동 꾸미기 (OpenRouter)
 </p>
 
 ---
@@ -33,7 +33,7 @@
 - 타임스탬프 6종: 경과 · 앱 시작부터 · **카운트다운** · **현재 시각처럼** · 특정 시각부터 · 없음
 - 글자 수 카운터, "입력할 때마다 Discord에 바로 반영" 모드
 
-### 🪄 AI 자동 꾸미기 (Claude)
+### 🪄 AI 자동 꾸미기 (OpenRouter)
 - `게임 좋아하고 개발하는 사람 느낌으로 만들어줘` → NAME·DETAILS·STATE·이미지·버튼까지 4가지 변형 생성
 - `Minecraft 서버 개발 중 mc.krl.kr` → `⛏️ Minecraft Development` / `Building my server` / `mc.krl.kr` + 버튼
 - **"✨ Make it aesthetic"** — 의미는 유지하고 스타일만 계속 바꿈 (이전 결과는 피함)
@@ -102,7 +102,7 @@ npm run dist       # 설치 파일 생성 → apps/windows/dist/
 1. [Discord Developer Portal](https://discord.com/developers/applications) → **New Application** — 앱 이름이 프로필의 "Playing ○○"가 됩니다 (예: `Coding Mode`)
 2. **APPLICATION ID** 복사 → 앱 ⚙️ 설정에 붙여넣기 → 저장
 3. Discord 데스크톱 앱이 실행 중이면 🟢 연결됨 표시 → 에디터에서 꾸미고 **✅ Discord에 적용**
-4. (선택) ⚙️ 설정 → Anthropic API 키를 넣으면 Claude가 상태를 만들어 줍니다
+4. (선택) ⚙️ 설정 → [OpenRouter API 키](https://openrouter.ai/keys)와 모델을 넣으면 AI가 상태를 만들어 줍니다
 
 > NAME을 여러 개 쓰고 싶다면 이름별로 Discord 앱을 만들어 **앱 프로필**에 등록하세요.
 
@@ -175,7 +175,7 @@ curl https://status.example.com/api/status -H "Authorization: Bearer $TOKEN"
 ## 🛠 개발
 
 ```text
-packages/core     공유 엔진 — presence 변환, Discord IPC/게이트웨이, 규칙, 템플릿, 테마, 미학 생성기, Claude AI
+packages/core     공유 엔진 — presence 변환, Discord IPC/게이트웨이, 규칙, 템플릿, 테마, 미학 생성기, OpenRouter AI
 packages/ui       공유 웹 UI — Electron(IPC)과 서버(HTTP+SSE) 모두에서 동작
 apps/windows      Electron 트레이 앱
 apps/server       Node HTTP 서버 + CLI + 배포 파일
@@ -187,7 +187,7 @@ npm test                    # 코어 단위 테스트
 ```
 데이터 위치 — Windows: `%APPDATA%\Discord Status Studio\data.json` · Linux: `~/.config/discord-status-studio/` (`DSS_DATA_DIR`로 변경)
 
-AI 기능은 [Anthropic API](https://console.anthropic.com/)의 `claude-opus-5-5`를 사용하며, 키가 없거나 오류가 나면 오프라인 생성기로 자동 전환됩니다.
+AI 기능은 [OpenRouter](https://openrouter.ai/)를 사용합니다 — 설정에서 원하는 모델(기본 `openrouter/auto`)을 고를 수 있고, 서버는 `OPENROUTER_API_KEY` 환경변수도 지원합니다. 구조화 출력을 지원하지 않는 모델은 JSON 프롬프트로 자동 재시도하며, 키가 없거나 오류가 나면 오프라인 생성기로 자동 전환됩니다.
 
 ## 라이선스
 MIT. Discord는 Discord Inc.의 상표이며 이 프로젝트는 Discord와 관련이 없습니다.
